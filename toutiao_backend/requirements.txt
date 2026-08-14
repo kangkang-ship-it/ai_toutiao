@@ -12,6 +12,7 @@ fastapi==0.125.0
 greenlet==3.3.0
 h11==0.16.0
 httptools==0.7.1
+httpx==0.28.1
 idna==3.11
 passlib==1.7.4
 pycparser==2.23

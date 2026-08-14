@@ -6,7 +6,7 @@ load_dotenv()  # 需在读取环境变量的模块（config.db_conf 等）导入
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import news, users, favorite, history
+from routers import news, users, favorite, history, ai
 from utils.exception_handlers import register_exception_handlers
 from config.db_conf import engine
 from models.base import Base
@@ -49,3 +49,4 @@ app.include_router(news.router)
 app.include_router(users.router)
 app.include_router(favorite.router)
 app.include_router(history.router)
+app.include_router(ai.router)
