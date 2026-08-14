@@ -1,11 +1,9 @@
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import Index, Integer, String, Enum, DateTime, ForeignKey
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
-
-class Base(DeclarativeBase):
-    pass
+from models.base import Base
 
 
 class User(Base):
