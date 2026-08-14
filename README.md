@@ -22,13 +22,13 @@
 - 分类网格页，快速跳转任意频道
 
 ### 🤖 AI 智能问答
-- 基于阿里云 DashScope（通义千问 qwen3-max-preview）大模型
+- 基于阿里云 DashScope（通义千问 qwen3-max-preview）大模型，由后端 SSE 代理转发（API Key 只保存在服务端）
 - 支持 SSE 流式输出，打字机效果实时展示
 - Markdown 渲染，支持代码块、列表、链接等富文本
 - 多轮对话上下文记忆
 
 ### 👤 用户系统
-- 注册 / 登录（JWT Token 认证）
+- 注册 / 登录（Token 数据库会话认证，7 天过期）
 - 个人信息管理（头像、用户名、个人简介）
 - 密码修改
 
@@ -66,9 +66,17 @@ npm run dev
 
 ### 后端 API
 
-本项目需要配套后端服务提供数据接口。后端 API 默认地址为 `http://127.0.0.1:8000`。
+后端代码位于本仓库 `toutiao_backend/` 目录（FastAPI + SQLAlchemy + MySQL + Redis），默认地址为 `http://127.0.0.1:8000`。
 
-> 如果你已有后端服务，可在 `src/config/api.js` 中修改 `baseURL`。
+```bash
+cd toutiao_backend
+python -m venv .venv
+.venv/Scripts/pip install -r requirements.txt
+# 需本地 MySQL(3306)/Redis(6379)；启动时自动建表
+.venv/Scripts/python -m uvicorn main:app --reload
+```
+
+> 如需修改后端地址，可在 `src/config/api.js` 中修改 `baseURL`。
 
 API 接口列表：
 
@@ -91,17 +99,25 @@ API 接口列表：
 | GET | `/api/history/list` | 浏览历史列表 |
 | DELETE | `/api/history/clear` | 清空历史 |
 | DELETE | `/api/history/delete/:id` | 删除单条历史 |
+| POST | `/api/ai/chat` | AI 问答（SSE 流式，服务端代理 DashScope） |
 
 ### AI 问答配置
 
-在 `src/config/api.js` 中配置 AI 接口：
+AI 问答由**后端代理**转发至阿里云 DashScope（通义千问），前端只需指向后端 `/api/ai/chat`，**API Key 只保存在服务端**，不再暴露给前端。
 
-```js
-export const aiChatConfig = {
-  apiEndpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
-  apiKey: 'your-api-key-here',   // 替换为你的 API Key
-  model: 'qwen3-max-preview'
-}
+后端启动前需配置环境变量（参考 `toutiao_backend/.env.example`）：
+
+| 环境变量 | 必填 | 说明 |
+|------|------|------|
+| `DASHSCOPE_API_KEY` | ✅ | 阿里云百炼平台的 API Key |
+| `DASHSCOPE_MODEL` | ❌ | 模型名，默认 `qwen3-max-preview` |
+
+```bash
+# Windows PowerShell
+$env:DASHSCOPE_API_KEY="sk-xxxx"
+
+# 或在 toutiao_backend/ 下创建 .env 文件（已被 .gitignore 忽略）
+DASHSCOPE_API_KEY=sk-xxxx
 ```
 
 ---
@@ -265,7 +281,7 @@ Content-Type: application/json
       "username": "your_username",
       "bio": "这是我的个人简介"
     },
-    "token": "eyJhbGciOiJIUzI1NiIs..."
+    "token": "53ce8881-9daa-4216-9b38-15590870ae44"
   }
 }
 ```
@@ -295,7 +311,7 @@ Content-Type: application/json
 | HTTP 请求 | Axios |
 | 国际化 | vue-i18n 9 |
 | Markdown | marked + DOMPurify |
-| AI 接口 | 阿里云 DashScope（兼容 OpenAI 格式） |
+| AI 接口 | 阿里云 DashScope（兼容 OpenAI 格式，后端 SSE 代理转发） |
 
 ---
 
