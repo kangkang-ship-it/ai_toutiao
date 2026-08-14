@@ -96,6 +96,20 @@ from utils.redis_cache import get_json_cache, set_cache   # 导入缓存工具
 router = APIRouter(prefix="/api/news", tags=["news"])
 
 
+def _serialize_news(n):
+    """把 News ORM 对象转为前端使用的 camelCase 字典（可直接 json.dumps 存入缓存）"""
+    return {
+        "id": n.id,
+        "title": n.title,
+        "description": n.description,
+        "image": n.image,
+        "author": n.author,
+        "categoryId": n.category_id,
+        "views": n.views,
+        "publishTime": n.publish_time.isoformat() if n.publish_time else None,
+    }
+
+
 @router.get("/categories")
 async def get_categories(
     skip: int = 0,
@@ -119,13 +133,16 @@ async def get_categories(
     # 2. 缓存未命中，查询数据库
     categories = await news.get_categories(db, skip, limit)
 
-    # 3. 存入缓存（过期时间 1 小时）
-    await set_cache(cache_key, categories, expire=3600)
+    # 3. 序列化为可 JSON 化的字典（ORM 对象直接 json.dumps 会抛 TypeError，导致缓存写入静默失败）
+    categories_data = [{"id": c.id, "name": c.name} for c in categories]
+
+    # 4. 存入缓存（过期时间 1 小时）
+    await set_cache(cache_key, categories_data, expire=3600)
 
     return {
         "code": 200,
         "message": "获取新闻分类成功",
-        "data": categories
+        "data": categories_data
     }
 
 
@@ -159,7 +176,7 @@ async def get_news_list(
     has_more = (offset + len(news_list)) < total
 
     data = {
-        "list": news_list,
+        "list": [_serialize_news(n) for n in news_list],
         "total": total,
         "hasMore": has_more
     }
