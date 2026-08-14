@@ -48,7 +48,6 @@
 <script setup>
 import { ref, onMounted, nextTick, watch } from 'vue';
 import TabBar from '../components/TabBar.vue';
-import { showToast } from 'vant';
 import * as marked from 'marked';
 import DOMPurify from 'dompurify';
 import { aiChatConfig } from '../config/api';
@@ -61,9 +60,8 @@ const userInput = ref('');
 const messagesContainer = ref(null);
 const isLoading = ref(false);
 
-// 从配置文件获取API设置
+// 从配置文件获取API设置（Key 已收敛至后端，前端不再持有）
 const apiEndpoint = ref(aiChatConfig.apiEndpoint);
-const apiKey = ref(aiChatConfig.apiKey);
 const model = ref(aiChatConfig.model);
 
 // 格式化消息内容（支持Markdown）
@@ -76,13 +74,7 @@ const formatMessage = (content) => {
 // 发送消息
 const sendMessage = async () => {
   if (!userInput.value.trim() || isLoading.value) return;
-  
-  // 检查API设置
-  if (!apiKey.value || apiKey.value === 'your-api-key-here') {
-    showToast('API Key未配置，请联系管理员');
-    return;
-  }
-  
+
   // 添加用户消息
   const userMessage = userInput.value.trim();
   messages.value.push({ role: 'user', content: userMessage });
@@ -121,8 +113,6 @@ const fetchAIResponse = async (userMessage) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey.value}`,
-        'X-DashScope-SSE': 'enable' // 添加阿里云DashScope所需的SSE头
       },
       body: JSON.stringify({
         model: model.value,
@@ -157,8 +147,13 @@ const fetchAIResponse = async (userMessage) => {
         
         try {
           const json = JSON.parse(data);
+          // 后端代理返回的错误帧（API Key 未配置/超时等）
+          if (json.error?.message) {
+            aiResponse = json.error.message;
+            break;
+          }
           // 适配阿里云DashScope的返回格式
-          const content = json.choices?.[0]?.delta?.content || 
+          const content = json.choices?.[0]?.delta?.content ||
                          json.output?.text || 
                          json.choices?.[0]?.message?.content || '';
           if (content) {
@@ -177,7 +172,7 @@ const fetchAIResponse = async (userMessage) => {
   
   // 如果没有收到任何内容
   if (!aiResponse) {
-    messages.value[messages.value.length - 1].content = '抱歉，我无法生成回复。请检查API设置或稍后再试。';
+    messages.value[messages.value.length - 1].content = '抱歉，我无法生成回复。请检查网络或稍后再试。';
   }
   } catch (error) {
     console.error('Fetch error:', error);
