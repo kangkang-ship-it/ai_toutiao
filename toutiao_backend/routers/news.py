@@ -92,6 +92,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.db_conf import get_db
 from crud import news
 from utils.redis_cache import get_json_cache, set_cache   # 导入缓存工具
+from utils.response import success_response               # 统一响应体封装（code/message/data）
 
 router = APIRouter(prefix="/api/news", tags=["news"])
 
@@ -124,11 +125,7 @@ async def get_categories(
     # 1. 尝试从缓存读取
     cached = await get_json_cache(cache_key)
     if cached is not None:
-        return {
-            "code": 200,
-            "message": "获取新闻分类成功（缓存）",
-            "data": cached
-        }
+        return success_response(message="获取新闻分类成功（缓存）", data=cached)
 
     # 2. 缓存未命中，查询数据库
     categories = await news.get_categories(db, skip, limit)
@@ -139,11 +136,7 @@ async def get_categories(
     # 4. 存入缓存（过期时间 1 小时）
     await set_cache(cache_key, categories_data, expire=3600)
 
-    return {
-        "code": 200,
-        "message": "获取新闻分类成功",
-        "data": categories_data
-    }
+    return success_response(message="获取新闻分类成功", data=categories_data)
 
 
 @router.get("/list")
@@ -164,11 +157,7 @@ async def get_news_list(
     # 2. 尝试从缓存读取
     cached = await get_json_cache(cache_key)
     if cached is not None:
-        return {
-            "code": 200,
-            "message": "获取新闻列表（缓存）",
-            "data": cached
-        }
+        return success_response(message="获取新闻列表（缓存）", data=cached)
 
     # 3. 缓存未命中，查询数据库
     news_list = await news.get_news_list(db, category_id, offset, page_size)
@@ -184,11 +173,7 @@ async def get_news_list(
     # 4. 存入缓存（过期时间 60 秒，新闻列表变化较快）
     await set_cache(cache_key, data, expire=60)
 
-    return {
-        "code": 200,
-        "message": "获取新闻列表",
-        "data": data
-    }
+    return success_response(message="获取新闻列表", data=data)
 
 
 @router.get("/detail")
@@ -212,19 +197,15 @@ async def get_news_detail(
     # 获取相关新闻
     related_news = await news.get_related_news(db, news_detail.id, news_detail.category_id)
 
-    return {
-        "code": 200,
-        "message": "success",
-        "data": {
-            "id": news_detail.id,
-            "title": news_detail.title,
-            "content": news_detail.content,
-            "image": news_detail.image,
-            "author": news_detail.author,
-            "publishTime": news_detail.publish_time,
-            "categoryId": news_detail.category_id,
-            "views": news_detail.views,
-            "relatedNews": related_news,
-        }
-    }
+    return success_response(message="success", data={
+        "id": news_detail.id,
+        "title": news_detail.title,
+        "content": news_detail.content,
+        "image": news_detail.image,
+        "author": news_detail.author,
+        "publishTime": news_detail.publish_time,
+        "categoryId": news_detail.category_id,
+        "views": news_detail.views,
+        "relatedNews": related_news,
+    })
 
