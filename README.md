@@ -1,6 +1,12 @@
-# 📰 新闻资讯（xwzx-news）
+# 📰 头条新闻系统（ai_toutiao）—— 移动端资讯后端
 
-一个基于 Vue 3 + Vant UI 的移动端新闻资讯应用，集成 AI 智能问答，支持多分类新闻浏览、用户收藏、浏览历史、主题切换和国际化。
+**FastAPI + SQLAlchemy + MySQL + Redis + Vue3 全栈资讯应用**：后端以 Router-CRUD-Model 三层架构提供 RESTful API，用 Redis 旁路缓存缓解首页高频查询压力，并基于 SSE 流式封装通义千问 AI 问答；前端基于 Vue 3 + Vant 提供多分类新闻浏览、收藏/历史云端同步与 AI 对话。
+
+![FastAPI](https://img.shields.io/badge/FastAPI-0.125-009688?logo=fastapi&logoColor=white)
+![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-异步-D71F00?logo=sqlalchemy&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-8%2B-4479A1?logo=mysql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7%2B-DC382D?logo=redis&logoColor=white)
+![Vue](https://img.shields.io/badge/Vue-3-4FC08D?logo=vuedotjs&logoColor=white)
 
 ---
 
@@ -12,6 +18,36 @@
 - **跨设备数据同步**：登录后收藏和历史记录与后端同步，更换设备不丢失个人数据。
 
 ---
+
+## 🏗️ 系统架构
+
+```mermaid
+flowchart LR
+    subgraph Frontend[前端 xwzx-news]
+        Vue[Vue 3 + Vant + Pinia]
+    end
+
+    subgraph Backend[后端 toutiao_backend FastAPI]
+        Router[Router 路由层<br/>news / user / favorite / history / ai]
+        CRUD[CRUD 数据访问层<br/>SQLAlchemy 异步 ORM]
+        Model[Model 模型层<br/>用户 / Token / 新闻 / 收藏 / 历史]
+        Cache[Redis 旁路缓存<br/>分类 1h / 列表 60s]
+        AI[AI SSE 代理<br/>StreamingResponse]
+    end
+
+    subgraph Data[存储与外部]
+        MySQL[(MySQL 8)]
+        Redis[(Redis)]
+        LLM[通义千问<br/>DashScope]
+    end
+
+    Vue -->|HTTP JSON| Router
+    Vue -->|SSE 流式| AI
+    Router --> CRUD --> Model --> MySQL
+    Router --> Cache --> Redis
+    AI -->|httpx 异步代理| LLM
+    LLM -->|逐 token| AI
+```
 
 ## 2. 主要功能
 
@@ -68,6 +104,13 @@ npm run dev
 
 后端代码位于本仓库 `toutiao_backend/` 目录（FastAPI + SQLAlchemy + MySQL + Redis），默认地址为 `http://127.0.0.1:8000`。
 
+**后端特性**：
+
+- **三层架构**：Router-CRUD-Model 分层，路由层只做参数校验与响应，数据访问集中在 CRUD 层，外键约束保证引用完整性
+- **Redis 旁路缓存**：首页高频查询走缓存（分类 1h / 列表 60s 差异化过期），缓存未命中自动回源数据库
+- **SSE 流式 AI 问答**：后端基于 StreamingResponse 透传 DashScope 流式响应，逐字下发解决同步接口首包延迟（TTFB）过高问题，API Key 只保存在服务端
+- **认证与接口健壮性**：bcrypt 密码哈希 + Token 数据库会话（7 天过期）；统一响应体（code/message/data）与全局异常处理器，保证接口返回格式一致、异常可追踪
+
 ```bash
 cd toutiao_backend
 python -m venv .venv
@@ -75,6 +118,14 @@ python -m venv .venv
 # 需本地 MySQL(3306)/Redis(6379)；启动时自动建表
 .venv/Scripts/python -m uvicorn main:app --reload
 ```
+
+> 首次启动前需创建数据库（建表由应用启动时自动完成）：
+>
+> ```sql
+> CREATE DATABASE news_app CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+> ```
+>
+> 数据库连接默认 `mysql+aiomysql://root:root@localhost:3306/news_app`，可通过环境变量 `DATABASE_URL` 覆盖。
 
 > 如需修改后端地址，可在 `src/config/api.js` 中修改 `baseURL`。
 
@@ -311,7 +362,10 @@ Content-Type: application/json
 | HTTP 请求 | Axios |
 | 国际化 | vue-i18n 9 |
 | Markdown | marked + DOMPurify |
-| AI 接口 | 阿里云 DashScope（兼容 OpenAI 格式，后端 SSE 代理转发） |
+| 后端框架 | FastAPI + SQLAlchemy 异步 ORM + Pydantic |
+| 数据库 | MySQL 8（aiomysql 异步驱动） |
+| 缓存 | Redis（旁路缓存模式，差异化过期策略） |
+| AI 接口 | 阿里云 DashScope（兼容 OpenAI 格式，httpx 异步代理 + SSE 流式透传） |
 
 ---
 
@@ -361,6 +415,18 @@ xwzx-news/
         └── locales/
             ├── zh-CN.js       # 中文语言包
             └── en-US.js       # 英文语言包
+```
+
+```
+toutiao_backend/
+├── main.py                  # FastAPI 入口（lifespan 自动建表、全局异常处理器）
+├── config/
+│   └── db_conf.py           # SQLAlchemy 异步引擎 + 会话工厂
+├── routers/                 # 路由层（news / user / favorite / history / ai）
+├── crud/                    # CRUD 层（数据库操作封装）
+├── models/                  # 模型层（ORM：用户 / Token / 新闻 / 收藏 / 历史）
+├── schemas/                 # Pydantic 请求/响应模型
+└── utils/                   # 统一响应体 / 异常处理 / Redis 缓存 / bcrypt / DashScope 客户端
 ```
 
 ---
